@@ -1,12 +1,14 @@
 import torch
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, Subset, TensorDataset
 from torchvision import datasets, transforms
+import random
 
 def get_celeba_loader(
     root: str,
     image_size: int,
     batch_size: int,
-    num_workers: int = 2
+    num_workers: int = 2,
+    max_samples: int = 20000
 ) -> DataLoader:
     """
         CelebA Loader
@@ -19,7 +21,11 @@ def get_celeba_loader(
         transforms.Normalize([0.5], [0.5]), # scale to [-1, 1] to match tanh output
     ])
 
-    dataset = datasets.ImageFolder(root=root, transform=transform)
+    full_dataset = datasets.ImageFolder(root=root, transform=transform)
+
+    # subset for faster iteration
+    indices = random.sample(range(len(full_dataset)), min(max_samples, len(full_dataset)))
+    dataset = Subset(full_dataset, indices)
 
     return DataLoader(
         dataset,
@@ -28,6 +34,20 @@ def get_celeba_loader(
         shuffle=True,
         pin_memory=True, # faster CPU to GPU transfer
         drop_last=True, # avoid batch-size of 1 edge case in BatchNorm
+    )
+
+def get_tensor_loader(pt_path: str, batch_size: int) -> DataLoader:
+    """
+    Loads preprocessed .pt tensor file — use this on Kaggle for all phases.
+    pt_path: e.g. '/kaggle/input/celeba-all-phases/celeba_32x32_gray.pt'
+    """
+    tensor = torch.load(pt_path)             # shape: (N, C, H, W)
+    dataset = TensorDataset(tensor)
+    return DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        drop_last=True
     )
 
 class FakeDataset(Dataset):

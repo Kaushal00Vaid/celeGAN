@@ -2,9 +2,10 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 from model import Discriminator, Generator
-from dataset import get_celeba_loader, get_fake_loader
+from dataset import get_celeba_loader, get_fake_loader, get_tensor_loader
 from utils import save_image_grid, plot_loss_curve
 
 # hyperparameters
@@ -16,21 +17,16 @@ IMAGE_DIM = 32 * 32 * 1 # 1024 - 32x32 grayscale
 NUM_EPOCHS = 50
 SAVE_EPOCHS = [1, 5, 10, 25, 50] # saving image grids to view the learning of G
 IS_KAGGLE = torch.cuda.is_available()
+PT_PATH=""
 
 def train():
     # data
-    if IS_KAGGLE:
-        loader = get_celeba_loader(
-            root="kaggle/input/celeba-dataset",
-            image_size=32,
-            batch_size=BATCH_SIZE
-        )
-
+    if IS_KAGGLE and PT_PATH:
+        loader = get_tensor_loader(pt_path=PT_PATH, batch_size=BATCH_SIZE)
+    elif IS_KAGGLE:
+        loader = get_celeba_loader(root=ROOT, image_size=32, batch_size=BATCH_SIZE)
     else:
-        loader = get_fake_loader(
-            batch_size=BATCH_SIZE,
-            image_size=32
-        )
+        loader = get_fake_loader(batch_size=BATCH_SIZE, image_size=32)
 
     # models
     D = Discriminator(img_dim=IMAGE_DIM).to(DEVICE)
@@ -55,7 +51,7 @@ def train():
         loss_G_epoch = 0.0
         loss_D_epoch = 0.0
 
-        for batch_idx, (real, _) in enumerate(loader):
+        for batch_idx, (real, _) in enumerate(tqdm(loader, desc=f"Epoch [{epoch}/{NUM_EPOCHS}]", leave=True)):
 
             real = real.view(real.size(0), -1).to(DEVICE) # flatten: (B, 1, 32, 32) --> (B, 1024)
             B = real.size(0)
