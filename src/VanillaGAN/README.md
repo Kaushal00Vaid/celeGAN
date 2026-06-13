@@ -37,3 +37,19 @@ The loss curve looks good and healthy:
 
 **This is the Nash equilibrium for BCE loss — both are stuck, neither can improve further.**  
 > This architecture is at the bottleneck.
+
+## Folder Structure
+- `dataset.py`: Defines the CelebA dataset loading and preprocessing logic.
+- `model.py`: Contains the Multi-Layer Perceptron (MLP) architecture for Generator and Discriminator.
+- `train.py`: The training loop for Vanilla GAN.
+- `test_wiring.py`: A script to test the model wiring and forward passes.
+- `utils.py`: Helper functions for generating images and other utilities.
+
+## Outputs
+Here are the generated faces after 50 epochs and the corresponding loss curve:
+
+### Generated Images (Epoch 50)
+![Epoch 50 Generation](outputs/epoch_050.png)
+
+### Loss Curve
+![Loss Curve](outputs/loss_curve.png)
