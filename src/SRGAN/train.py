@@ -10,12 +10,12 @@ from utils import save_image_grid, plot_loss_curve
 # hyperparameters
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 LR = 1e-4 # lower thaan other -- ResNet is sensitive
-BATCH_SIZE = 64 # memory heavy
+BATCH_SIZE = 128 # memory heavy (64 on single GPU, 128 on double GPU utilization)
 NUM_EPOCHS = 50
 SAVE_EPOCHS = [1, 5, 10, 25, 50]
 
-LR_PT_PATH = ""
-HR_PT_PATH = ""
+LR_PT_PATH = "/kaggle/input/datasets/kaushalvaid/celegan-all-phases/celeba_16x16_lr.pt"
+HR_PT_PATH = "/kaggle/input/datasets/kaushalvaid/celegan-all-phases/celeba_64x64_hr.pt"
 
 # loss weights
 LAMBDA_PERCEPTUAL = 1.0
@@ -34,6 +34,10 @@ def train():
     G = Generator(num_res_blocks=16).to(DEVICE)
     D = Discriminator().to(DEVICE)
     vgg = VGGFeatureExtractor().to(DEVICE)
+
+    G = nn.DataParallel(G)
+    D = nn.DataParallel(D)
+    
     vgg.eval()
 
     # loss functions
@@ -64,7 +68,7 @@ def train():
             hr = hr.to(DEVICE)
             B = lr.size(0)
 
-            real_labels = torch.ones(B, 1).to(DEVICE)
+            real_labels = torch.ones(B, 1).to(DEVICE) * 0.9
             fake_labels = torch.zeros(B, 1).to(DEVICE)
 
             # train D
@@ -77,31 +81,33 @@ def train():
             opt_D.zero_grad()
             loss_D.backward()
             opt_D.step()
-
-            # train G
-            fake_hr = G(lr)
-
-            # adversarial loss: food D
-            loss_adv = criterion_adv(D(fake_hr), real_labels)
-            
-            # perceptual: VGG feat similarity
-            with torch.no_grad():
-                features_real = vgg(hr)
-            features_fake = vgg(fake_hr)
-            loss_perceptual = criterion_per(features_fake, features_real)
-
-            # pixel: coarse structure
-            loss_mse = criterion_mse(fake_hr, hr)
-
-            # combined: G loss
-            loss_G = (LAMBDA_PERCEPTUAL * loss_perceptual
-                    + LAMBDA_ADV * loss_adv
-                    + LAMBDA_MSE * loss_mse
-            )
-
-            opt_G.zero_grad()
-            loss_G.backward()
-            opt_G.step()
+    
+            # training G twice per D -- D was dominating a lot...
+            for _ in range(2):
+                # train G
+                fake_hr = G(lr)
+    
+                # adversarial loss: food D
+                loss_adv = criterion_adv(D(fake_hr), real_labels)
+                
+                # perceptual: VGG feat similarity
+                with torch.no_grad():
+                    features_real = vgg(hr)
+                features_fake = vgg(fake_hr)
+                loss_perceptual = criterion_per(features_fake, features_real)
+    
+                # pixel: coarse structure
+                loss_mse = criterion_mse(fake_hr, hr)
+    
+                # combined: G loss
+                loss_G = (LAMBDA_PERCEPTUAL * loss_perceptual
+                        + LAMBDA_ADV * loss_adv
+                        + LAMBDA_MSE * loss_mse
+                )
+    
+                opt_G.zero_grad()
+                loss_G.backward()
+                opt_G.step()
 
             loss_G_epoch += loss_G.item()
             loss_D_epoch += loss_D.item()
